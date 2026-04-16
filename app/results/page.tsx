@@ -1,8 +1,7 @@
-interface ResultsPageProps {
-  searchParams: {
-    name?: string;
-  };
-}
+"use client";
+
+import { Suspense, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface PlayerResponse {
   name: string;
@@ -13,40 +12,52 @@ interface PlayerResponse {
   rank: string;
 }
 
-async function getPlayer(name: string): Promise<PlayerResponse | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const response = await fetch(`${baseUrl}/api/player/${encodeURIComponent(name)}`, {
-    cache: "no-store"
-  });
+const mockPlayers: Record<string, Omit<PlayerResponse, "name">> = {
+  shroud: { level: 421, kd: 3.8, wins: 119, matches: 840, rank: "Diamond I" },
+  drdisrespect: { level: 388, kd: 2.4, wins: 75, matches: 690, rank: "Platinum II" },
+  playerunknown: { level: 500, kd: 4.1, wins: 202, matches: 1044, rank: "Master" }
+};
 
-  if (!response.ok) {
+function getPlayer(name: string): PlayerResponse | null {
+  const normalizedName = name.toLowerCase();
+  const playerData = mockPlayers[normalizedName];
+
+  if (!playerData) {
     return null;
   }
 
-  return response.json();
+  return {
+    name,
+    ...playerData
+  };
 }
 
-export default async function ResultsPage({ searchParams }: ResultsPageProps) {
-  const name = searchParams.name?.trim();
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<ResultsMessage title="Loading player..." description="Fetching profile details." />}>
+      <ResultsContent />
+    </Suspense>
+  );
+}
+
+function ResultsContent() {
+  const searchParams = useSearchParams();
+  const name = searchParams.get("name")?.trim() ?? "";
+
+  const player = useMemo(() => {
+    if (!name) {
+      return null;
+    }
+
+    return getPlayer(name);
+  }, [name]);
 
   if (!name) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-3xl font-bold">No player selected</h1>
-        <p className="mt-3 text-slate-300">Go back and enter a PUBG player name to search.</p>
-      </main>
-    );
+    return <ResultsMessage title="No player selected" description="Go back and enter a PUBG player name to search." />;
   }
 
-  const player = await getPlayer(name);
-
   if (!player) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-3xl font-bold">Player not found</h1>
-        <p className="mt-3 text-slate-300">No profile data was returned for “{name}”.</p>
-      </main>
-    );
+    return <ResultsMessage title="Player not found" description={`No profile data was returned for “${name}”.`} />;
   }
 
   return (
@@ -60,6 +71,15 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
         <Stat label="Wins" value={String(player.wins)} />
         <Stat label="Matches" value={String(player.matches)} />
       </div>
+    </main>
+  );
+}
+
+function ResultsMessage({ title, description }: { title: string; description: string }) {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-6 text-center">
+      <h1 className="text-3xl font-bold">{title}</h1>
+      <p className="mt-3 text-slate-300">{description}</p>
     </main>
   );
 }
